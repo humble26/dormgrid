@@ -1,0 +1,17 @@
+{
+  "name": "dormgrid-desktop",
+  "version": "0.1.0",
+  "description": "DormGrid 桌面端 —— 协调器 / 工作节点二合一管理窗口",
+  "main": "main.js",
+  "author": "DormGrid",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "e2e": "electron . --e2e",
+    "dist": "electron-builder --win portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -1,0 +1,10 @@
+tiles/
+output/
+dist/
+tools/ffmpeg.exe
+tools/dl/
+tools/blender/
+*.log
+node_modules/
+e2e-*.png
+e2e-result.json

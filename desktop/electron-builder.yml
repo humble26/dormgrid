@@ -1,0 +1,28 @@
+# DormGrid 桌面端打包配置（electron-builder）
+# 产物: desktop/dist/DormGrid-0.1.0-portable.exe —— 免安装单文件，拷到其他电脑双击即用
+appId: com.dormgrid.desktop
+productName: DormGrid
+directories:
+  output: dist
+files:
+  - main.js
+  - preload.js
+  - control.html
+  - package.json
+# 内核随包携带（asar 之外，工作节点子进程以 ELECTRON_RUN_AS_NODE 直接运行真实文件）
+extraResources:
+  - from: ../dormgrid.js
+    to: kernel/dormgrid.js
+  - from: ../src
+    to: kernel/src
+  - from: ../tools
+    to: kernel/tools
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  signAndEditExecutable: false
+portable:
+  artifactName: DormGrid-${version}-portable.exe
+npmRebuild: false

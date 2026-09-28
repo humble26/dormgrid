@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>DormGrid 桌面端</title>
+<style>
+  :root {
+    --paper:#F4F4F1; --card:#FFFFFF; --ink:#191C1F; --ink-2:#5C6470; --ink-3:#9AA1AB;
+    --line:#E4E4DF; --accent:#2E5AAC; --accent-deep:#25498C; --ok:#2E7D4F; --bad:#B03A2E;
+    --mono:Consolas,"Cascadia Mono","Courier New",monospace;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font:14px/1.5 "Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; flex-direction:column;
+  }
+  ::selection { background:#D7E0F2; }
+  button { font:inherit; cursor:pointer; border-radius:8px; }
+  input { font:inherit; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+
+  .pulse { position:fixed; top:0; left:0; height:3px; width:0; background:var(--accent); transition:width .4s; z-index:9; }
+
+  header {
+    display:flex; align-items:baseline; justify-content:space-between;
+    padding:16px 22px 12px; border-bottom:1px solid var(--line);
+  }
+  .wordmark { font-size:15px; font-weight:650; letter-spacing:.2px; }
+  .wordmark small { font-weight:400; color:var(--ink-3); margin-left:10px; font-size:12px; }
+  #head-state { font-size:12px; color:var(--ink-2); display:flex; align-items:center; gap:7px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--ink-3); }
+  .dot.on { background:var(--accent); }
+  .dot.ok { background:var(--ok); }
+
+  main { flex:1; display:grid; grid-template-columns:400px 1fr; gap:16px; padding:16px 22px 20px; min-height:0; }
+
+  .sheet { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; overflow-y:auto; }
+
+  .figure { font-size:38px; font-weight:600; letter-spacing:-.5px; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .figure .of { color:var(--ink-3); font-weight:400; margin:0 6px; font-size:26px; }
+  .figure #total { color:var(--ink-2); font-size:26px; }
+  .figure-label { font-size:12px; color:var(--ink-3); margin-top:2px; }
+  .state-line { font-size:12px; color:var(--ink-2); margin-top:14px; }
+  .state-line b { font-weight:600; color:var(--ink); }
+  .state-line b.ok { color:var(--ok); }
+  .state-line b.on { color:var(--accent); }
+
+  .role { padding:14px 0 4px; }
+  .role + .role { border-top:1px solid var(--line); margin-top:14px; padding-top:16px; }
+  .role-head { display:flex; justify-content:space-between; align-items:baseline; }
+  .role-head h2 { margin:0; font-size:13px; font-weight:600; }
+  .role-head .state { font-size:12px; color:var(--ink-3); }
+  .role-head .state.on { color:var(--accent); }
+  .hint { margin:4px 0 12px; font-size:12px; color:var(--ink-2); line-height:1.6; }
+  .field { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .field label { width:64px; flex-shrink:0; font-size:12px; color:var(--ink-2); }
+  .field input, .field select {
+    flex:1; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:8px;
+    padding:7px 10px; color:var(--ink); transition:border-color .15s;
+  }
+  .field input:hover:not(:disabled), .field select:hover:not(:disabled) { border-color:var(--ink-3); }
+  .field input:disabled { background:var(--paper); color:var(--ink-3); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn {
+    border:1px solid transparent; background:var(--accent); color:#fff;
+    padding:7px 14px; font-size:13px; transition:background .15s;
+  }
+  .btn:hover:not(:disabled) { background:var(--accent-deep); }
+  .btn:active:not(:disabled) { transform:translateY(.5px); }
+  .btn.quiet { background:var(--card); border-color:var(--line); color:var(--ink); }
+  .btn.quiet:hover:not(:disabled) { border-color:var(--ink-3); }
+  .btn:disabled { opacity:.4; cursor:default; }
+
+  .logpane {
+    display:flex; flex-direction:column; min-height:0;
+    background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+  }
+  .log-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .log-head h2 { margin:0; font-size:13px; font-weight:600; }
+  .log-head button { border:none; background:none; color:var(--ink-3); font-size:12px; padding:2px 4px; }
+  .log-head button:hover { color:var(--ink); }
+  #log {
+    flex:1; overflow-y:auto; margin:0;
+    font:12px/1.7 var(--mono); white-space:pre-wrap; word-break:break-all;
+    color:var(--ink-2);
+  }
+  /* 日志分级: 普通事件弱化，里程碑高亮，错误红显；"只看重要"可过滤普通行 */
+  #log .line { padding:0 8px; margin:0 -8px; border-radius:4px; }
+  #log .line.hi { background:#E9EFFB; }
+  #log .line.hi .msg { color:var(--ink); font-weight:600; }
+  #log .line.err { background:#FAEEEC; }
+  #log .line.err .msg { color:var(--bad); font-weight:600; }
+  #log .line.warn .msg { color:var(--accent-deep); }
+  #log .t { color:var(--ink-3); }
+  #log .ch { color:var(--accent); }
+  #log .ch.node { color:var(--ink-2); }
+  #log .empty { color:var(--ink-3); }
+  #log::-webkit-scrollbar { width:8px; }
+  #log::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
+
+  @media (prefers-reduced-motion: reduce) { .pulse { transition:none; } }
+</style>
+</head>
+<body>
+  <div class="pulse" id="pulse"></div>
+  <header>
+    <div class="wordmark">DormGrid<small>局域网志愿计算网格</small></div>
+    <div id="head-state"><span class="dot" id="head-dot"></span><span id="head-text">空闲</span></div>
+  </header>
+
+  <main>
+    <section class="sheet">
+      <div class="figure"><span id="done">0</span><span class="of">/</span><span id="total">—</span></div>
+      <div class="figure-label">瓦片完成</div>
+      <div class="state-line">协调器 <b id="coord-mini">未运行</b>，在线节点 <b id="nodes-mini">0</b> 个</div>
+
+      <div class="role">
+        <div class="role-head"><h2>协调器</h2><span class="state" id="coord-badge">未运行</span></div>
+        <p class="hint">出图与派任务的一端。启动后本机成为网格中心，其他机器凭地址即可加入。</p>
+        <div class="field"><label for="port">端口</label><input id="port" value="47820"></div>
+        <div class="field"><label for="jobtype">任务类型</label>
+          <select id="jobtype">
+            <option value="auto" selected>演示渲染（Mandelbrot）</option>
+            <option value="blender">Blender 农场</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button id="btn-coord-start" class="btn">启动协调器</button>
+          <button id="btn-coord-stop" class="btn quiet" disabled>停止</button>
+          <button id="btn-dash" class="btn quiet" disabled>打开仪表盘</button>
+          <button id="btn-out" class="btn quiet" title="成图、帧序列与 mp4 所在目录">输出目录</button>
+        </div>
+      </div>
+
+      <div class="role">
+        <div class="role-head"><h2>Blender 工程</h2><span class="state" id="blend-badge">需协调器运行</span></div>
+        <p class="hint">任务类型选「Blender 农场」并启动协调器后，在这里提交 .blend 工程，网格里装有 Blender 的节点会自动分帧渲染。渲染完成后用"输出目录"查看帧序列与 mp4。</p>
+        <div class="field"><label for="blendfile">工程文件</label><input type="file" id="blendfile" accept=".blend"></div>
+        <div class="field"><label for="blendframes">帧范围</label><input id="blendframes" value="1-30" placeholder="如 1-120"></div>
+        <div class="field"><label for="blendfps">帧率</label><input id="blendfps" value="24"></div>
+        <div class="actions">
+          <button id="btn-submit" class="btn" disabled>提交渲染</button>
+        </div>
+      </div>
+
+      <div class="role">
+        <div class="role-head"><h2>工作节点</h2><span class="state" id="worker-badge">0 个在跑</span></div>
+        <p class="hint">贡献算力的一端。地址留空将自动寻找协调器；「克制」模式只用一半线程，检测到人在用电脑或电池供电时自动让路。</p>
+        <div class="field"><label for="wname">节点名称</label><input id="wname"></div>
+        <div class="field"><label for="waddr">协调器地址</label><input id="waddr" placeholder="留空自动发现，或填 IP:47820"></div>
+        <div class="field"><label for="perf">性能模式</label>
+          <select id="perf">
+            <option value="polite" selected>克制（推荐）</option>
+            <option value="full">全力</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button id="btn-work-start" class="btn">加入网格</button>
+          <button id="btn-work-stop" class="btn quiet">全部停止</button>
+          <button id="btn-allin" class="btn quiet" title="协调器 + 本机节点 + 仪表盘">一键全开</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="logpane">
+      <div class="log-head">
+        <h2>日志</h2>
+        <span>
+          <button id="filter" title="只显示里程碑与错误">只看重要</button>
+          <button id="clear">清空</button>
+        </span>
+      </div>
+      <pre id="log"><span class="empty">等待事件。启动协调器或加入网格后，这里会滚动显示领活与交卷记录。</span></pre>
+    </section>
+  </main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// 设置记忆: 端口/任务类型/节点名/地址/性能模式保存在本机，下次打开免重填
+const savedUI = JSON.parse(localStorage.getItem('dormgrid-ui') || '{}');
+$('port').value = savedUI.port || '47820';
+if (savedUI.jobtype) $('jobtype').value = savedUI.jobtype;
+$('wname').value = savedUI.wname || ('节点-' + Math.floor(Math.random() * 90 + 10));
+if (savedUI.waddr) $('waddr').value = savedUI.waddr;
+if (savedUI.perf) $('perf').value = savedUI.perf;
+function persist() {
+  localStorage.setItem('dormgrid-ui', JSON.stringify({
+    port: $('port').value, jobtype: $('jobtype').value,
+    wname: $('wname').value, waddr: $('waddr').value, perf: $('perf').value,
+  }));
+}
+['port', 'jobtype', 'wname', 'waddr', 'perf'].forEach(id => $(id).addEventListener('change', persist));
+
+const logEl = $('log');
+// 日志分级: 普通事件弱化显示，里程碑（上线/进度/组图/收工等）高亮，错误红显
+function classify(text) {
+  if (text.startsWith('[err]') || text.includes('失败') || text.includes('出错')) return 'err';
+  if (/已注册|上线|收工|组图|渲染完成|就绪|已提交|性能模式|重新排队|局域网地址|仪表盘:/.test(text)) return 'hi';
+  if (/让路中|等待协调器就绪/.test(text)) return 'warn';
+  return '';
+}
+function logLine(channel, text, t, isErr) {
+  const empty = logEl.querySelector('.empty');
+  if (empty) empty.remove();
+  const cls = isErr ? 'err' : classify(text);
+  const line = document.createElement('div');
+  line.className = 'line' + (cls ? ' ' + cls : '');
+  if (onlyImportant && cls === '') line.style.display = 'none';
+  const time = document.createElement('span');
+  time.className = 't';
+  time.textContent = '[' + t + '] ';
+  const ch = document.createElement('span');
+  ch.className = 'ch' + (channel.startsWith('节点') ? ' node' : '');
+  ch.textContent = channel + ' ';
+  const msg = document.createElement('span');
+  msg.className = 'msg';
+  msg.textContent = text;
+  line.append(time, ch, msg);
+  logEl.append(line);
+  while (logEl.childElementCount > 400) logEl.firstElementChild.remove();
+  logEl.scrollTop = logEl.scrollHeight;
+}
+window.dormgrid.onLog(({ channel, text, t }) => logLine(channel, text, t, text.startsWith('[err]')));
+let onlyImportant = false;
+$('filter').onclick = () => {
+  onlyImportant = !onlyImportant;
+  $('filter').textContent = onlyImportant ? '看全部' : '只看重要';
+  $('filter').style.color = onlyImportant ? 'var(--accent)' : '';
+  for (const l of logEl.querySelectorAll('.line')) {
+    l.style.display = onlyImportant && l.className.indexOf('hi') < 0 && l.className.indexOf('err') < 0 ? 'none' : '';
+  }
+};
+$('clear').onclick = () => {
+  logEl.innerHTML = '<span class="empty">已清空。</span>';
+};
+
+function setHead(dotClass, text) {
+  $('head-dot').className = 'dot ' + dotClass;
+  $('head-text').textContent = text;
+}
+let coordRunningPort = 0; // 提交接口用运行中的实际端口，而不是输入框里可能被改动的值
+window.dormgrid.onState(s => {
+  const on = s.coordinator;
+  coordRunningPort = on ? s.port : 0;
+  $('coord-badge').textContent = on ? ('运行中 :' + s.port) : '未运行';
+  $('coord-badge').className = 'state' + (on ? ' on' : '');
+  $('coord-mini').textContent = on ? ('运行中 :' + s.port) : '未运行';
+  $('coord-mini').className = on ? 'on' : '';
+  $('worker-badge').textContent = s.workers.length + ' 个在跑';
+  $('nodes-mini').textContent = s.workers.length;
+  $('btn-coord-start').disabled = on;
+  $('btn-coord-stop').disabled = !on;
+  $('btn-dash').disabled = !on;
+  $('port').disabled = on;
+  $('jobtype').disabled = on;
+  $('blend-badge').textContent = on ? '可提交' : '需协调器运行';
+  $('blend-badge').className = 'state' + (on ? ' on' : '');
+  $('btn-submit').disabled = !on;
+  $('blendfile').disabled = !on;
+  $('blendframes').disabled = !on;
+  $('blendfps').disabled = !on;
+  if (!on) setHead('', '空闲');
+});
+window.dormgrid.onStatus(s => {
+  if (s.offline) {
+    $('pulse').style.width = '0';
+    return;
+  }
+  $('done').textContent = s.done;
+  $('total').textContent = s.total;
+  $('nodes-mini').textContent = (s.workers || []).length;
+  $('pulse').style.width = (s.total ? (100 * s.done / s.total) : 0) + '%';
+  if (s.complete) setHead('ok', '已完成');
+  else if ((s.workers || []).length) setHead('on', '计算中');
+});
+
+$('btn-coord-start').onclick = async () => {
+  const r = await window.dormgrid.startCoordinator({ port: Number($('port').value) || 47820, job: $('jobtype').value });
+  if (!r.ok) logLine('错误', r.error, new Date().toTimeString().slice(0, 8), true);
+};
+$('btn-coord-stop').onclick = () => window.dormgrid.stopCoordinator();
+$('btn-dash').onclick = () => window.dormgrid.openDashboard();
+$('btn-out').onclick = () => window.dormgrid.openOutput();
+$('btn-submit').onclick = async () => {
+  const t = new Date().toTimeString().slice(0, 8);
+  const f = $('blendfile').files[0];
+  if (!f) {
+    logLine('错误', '请先选择 .blend 工程文件', t, true);
+    return;
+  }
+  if (!coordRunningPort) {
+    logLine('错误', '协调器未运行', t, true);
+    return;
+  }
+  $('btn-submit').disabled = true;
+  logLine('提交', '上传工程 ' + f.name + '（' + (f.size / 1048576).toFixed(1) + ' MB），工程越大等待越久 ...', t);
+  try {
+    const q = new URLSearchParams({ frames: $('blendframes').value.trim() || '1-10', fps: $('blendfps').value.trim() || '24' });
+    const res = await fetch('http://127.0.0.1:' + coordRunningPort + '/api/job/blender?' + q, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: await f.arrayBuffer(),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      logLine('错误', '提交失败: ' + (j.error || ('HTTP ' + res.status)) + '（若提示已有任务，请先停止协调器再以 Blender 农场模式启动）', t, true);
+    } else {
+      logLine('提交', '已提交 ' + j.tasks + ' 帧，网格节点开始分帧渲染；完成后用"输出目录"查看 frames/ 与 movie.mp4', t);
+    }
+  } catch (e) {
+    logLine('错误', '提交失败: ' + e, t, true);
+  }
+  $('btn-submit').disabled = false;
+};
+$('btn-work-start').onclick = async () => {
+  const r = await window.dormgrid.startWorker({ name: $('wname').value || '未命名', addr: $('waddr').value, perf: $('perf').value });
+  if (!r.ok) logLine('错误', r.error, new Date().toTimeString().slice(0, 8), true);
+};
+$('btn-work-stop').onclick = () => window.dormgrid.stopWorkers();
+$('btn-allin').onclick = async () => {
+  const port = Number($('port').value) || 47820;
+  const r1 = await window.dormgrid.startCoordinator({ port, job: $('jobtype').value });
+  if (!r1.ok) logLine('错误', r1.error, new Date().toTimeString().slice(0, 8), true);
+  const r2 = await window.dormgrid.startWorker({ name: $('wname').value || '本机节点', addr: '127.0.0.1:' + port, perf: $('perf').value });
+  if (!r2.ok) logLine('错误', r2.error, new Date().toTimeString().slice(0, 8), true);
+  await window.dormgrid.openDashboard();
+};
+</script>
+</body>
+</html>

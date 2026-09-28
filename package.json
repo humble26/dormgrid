@@ -1,0 +1,14 @@
+{
+  "name": "dormgrid",
+  "version": "0.2.0",
+  "private": true,
+  "description": "DormGrid 宿舍志愿计算网格",
+  "scripts": {
+    "test": "node --test tests/run-tests.js",
+    "build:exe": "bash scripts/build-exe.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
+}
