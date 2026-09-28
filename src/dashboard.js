@@ -105,7 +105,20 @@ const dashboardHTML = `<!doctype html>
 </div>
 
 <script>
-function esc(s){ return String(s == null ? '' : s); }
+// HTML 转义。节点名由 /api/register 直接来自局域网内任意主机，
+// 拼进 innerHTML 前必须转义（& 必须最先替换，否则会二次转义已生成的实体）。
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// 状态值只允许出现在 class 名里，白名单化避免空格/引号破坏 class 属性
+function safeState(s){
+  return ['pending', 'running', 'done', 'failed'].indexOf(s) >= 0 ? s : 'pending';
+}
 function refresh(){
   fetch('/api/status').then(function(r){ return r.json(); }).then(function(s){
     document.getElementById('done').textContent = s.done;
@@ -133,14 +146,14 @@ function refresh(){
     g.innerHTML = '';
     tiles.forEach(function(t){
       var d = document.createElement('div');
-      d.className = 'tile ' + t.state;
-      if (t.state === 'done' && t.file) d.innerHTML = '<img src="' + t.file + '">';
+      d.className = 'tile ' + safeState(t.state);
+      if (t.state === 'done' && t.file) d.innerHTML = '<img src="' + esc(t.file) + '" alt="">';
       g.appendChild(d);
     });
 
     document.getElementById('final').innerHTML = (s.complete && s.job !== 'blender')
       ? '<h2>成图</h2><div class="final-frame"><img src="/image.png" alt="最终成图"></div>' +
-        '<div class="caption">由 ' + s.total + ' 块瓦片拼合，图像文件位于协调器 output 目录。</div>'
+        '<div class="caption">由 ' + esc(s.total) + ' 块瓦片拼合，图像文件位于协调器 output 目录。</div>'
       : '';
   }).catch(function(){});
 }

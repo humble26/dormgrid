@@ -389,6 +389,61 @@ test('仪表盘页面与静态路由', async t => {
   assert.equal((await fetch('http://127.0.0.1:' + port + '/image.png')).status, 404, '未组图时 image.png 404');
 });
 
+// 从 dashboard.js 里按括号配对取出真实函数源码并求值，避免测试里另抄一份实现（抄的那份会漂移）
+function extractFn(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  if (start < 0) throw new Error('dashboard.js 里未找到函数 ' + name);
+  let depth = 0;
+  for (let j = src.indexOf('{', start); j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}') { depth--; if (depth === 0) return src.slice(start, j + 1); }
+  }
+  throw new Error('函数未闭合: ' + name);
+}
+
+test('仪表盘 XSS：esc() 必须真正转义，节点名不可注入', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'dashboard.js'), 'utf8');
+  const esc = new Function('return (' + extractFn(src, 'esc') + ')')();
+
+  // 攻击者就是局域网里任意一台机器 —— 它的注册名会原样进 esc()
+  const payloads = [
+    '<img src=x onerror=alert(1)>',
+    '"><script>alert(1)</script>',
+    "'><svg onload=alert(1)>",
+    '</td><td>伪造列',
+    'javascript:alert(1)',
+  ];
+  for (const p of payloads) {
+    const out = esc(p);
+    assert.ok(!/[<>"']/.test(out), `未转义: ${JSON.stringify(p)} -> ${JSON.stringify(out)}`);
+  }
+
+  // & 必须最先替换，否则会二次转义（'<' 应变成 &lt; 而不是 &amp;lt;）
+  assert.equal(esc('<'), '&lt;', '< 单次转义');
+  assert.equal(esc('&'), '&amp;', '& 转义');
+  assert.equal(esc('&lt;'), '&amp;lt;', '已转义实体被再次转义，不是二次编码');
+  assert.equal(esc(null), '', 'null 安全');
+  assert.equal(esc(undefined), '', 'undefined 安全');
+  assert.equal(esc(0), '0', '0 不应被当成空值');
+
+  // 注入点确实调用了 esc()（防止以后有人改回去）
+  assert.ok(/esc\(w\.name\)/.test(src), '节点名经 esc()');
+  assert.ok(/esc\(t\.file\)/.test(src), '瓦片文件名经 esc()');
+  assert.ok(!/innerHTML\s*=\s*'[^']*'\s*\+\s*(w\.name|t\.file)\b/.test(src),
+    '没有直接拼接未转义值的 innerHTML');
+});
+
+test('仪表盘 XSS：safeState() 白名单化状态值', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'dashboard.js'), 'utf8');
+  const safeState = new Function('return (' + extractFn(src, 'safeState') + ')')();
+
+  assert.equal(safeState('done'), 'done', '合法状态保留');
+  assert.equal(safeState('running'), 'running', '合法状态保留');
+  for (const bad of ['done x" onload="alert(1)', '', null, undefined, 123]) {
+    assert.equal(safeState(bad), 'pending', `非法状态回退: ${JSON.stringify(bad)}`);
+  }
+});
+
 // ============ 8. 性能策略（克制模式） ============
 
 test('让路策略：用户活动/电池让路，探测不可用与全力模式放行', () => {
